@@ -1,0 +1,31 @@
+services:
+  # 1. Service Database (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: ejurnal_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: hamasu 
+      MYSQL_DATABASE: db_ejurnal_guru_smkn5 
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+
+  # 2. Service Aplikasi (Node.js)
+  app:
+    container_name: ejurnal_app
+    build: .
+    restart: unless-stopped
+    ports:
+      # Port 3000 dari container ke port 3000 di komputer host
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "mysql://root:hamasu@db:3306/db_ejurnal_guru_smkn5" 
+      JWT_SECRET: "9605e8ab00caac7855fcd4f18cab94e34c441885d5b8dce3502762e29d33be4a"
+      PORT: 3000
+    depends_on:
+      - db
+
+volumes:
+  db-data:

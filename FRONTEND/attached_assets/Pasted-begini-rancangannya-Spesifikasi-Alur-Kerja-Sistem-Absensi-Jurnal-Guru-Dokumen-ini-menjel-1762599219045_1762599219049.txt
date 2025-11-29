@@ -1,0 +1,76 @@
+begini rancangannya:
+
+ Spesifikasi Alur Kerja Sistem (Absensi & Jurnal Guru)
+
+Dokumen ini menjelaskan alur kerja sistem berdasarkan tiga (3) role pengguna.
+
+ 1. Role Pengguna Sistem
+
+Sistem ini memiliki tiga jenis pengguna dengan hak akses yang berbeda:
+
+1.  Admin: Mengelola data master dan mendaftarkan akun Guru & Kepala Sekolah.
+2.  Guru: Mengisi jurnal harian dan absensi siswa di kelas yang diampu.
+3.  Kepala Sekolah (Kepsek): Memantau dan melihat laporan dari semua Guru.
+
+
+ 2. Alur Kerja Sistem
+
+Berikut adalah alur kerja (workflow) untuk masing-masing role:
+
+ A. Role Admin
+
+1. Login Admin
+Admin mengakses halaman login dan memasukkan kredensial.
+Username: admin
+Password: admin123
+
+2. Dashboard Admin (Pendaftaran Akun)
+Setelah login, Admin masuk ke dashboard yang memiliki fitur utama berupa Formulir Pendaftaran Guru/Kepsek.
+
+Formulir ini berisi kolom-kolom berikut:
+NIP: (Nomor Induk Pegawai)
+Nama Lengkap:
+Role: (Dropdown, pilihan: "Guru" atau "Kepsek")
+Jurusan: (Opsional. Diisi untuk guru produktif, dikosongkan untuk guru non-produktif seperti Matematika, Bahasa Indonesia, dll.)
+Kelas yang Diampu: (Dropdown, misal: "10 RPL 1", "11 TKJ 2", dst.)
+Mapel yang Diajar: (Dropdown, misal: "Algoritma Pemrograman", "Bahasa Indonesia", dst.)
+Password Baru: (Dibuat oleh Admin untuk login Guru/Kepsek)
+
+Setelah semua data terisi, Admin menekan tombol "Daftar" untuk membuat akun baru.
+
+---
+B. Role Guru
+
+1. Login Guru
+Guru login menggunakan NIP dan password yang telah didaftarkan oleh Admin.
+NIP: (Contoh: 198227272)
+Password: (Contoh: 123guru)
+
+2. Dashboard Guru (Pengisian Jurnal & Absensi)
+Setelah login, Guru akan melihat halaman dashboard yang menampilkan daftar kelas yang diampu (sesuai data yang dimasukkan Admin).
+
+Contoh Tampilan Dashboard Guru:
+Nama Guru: Iyan Hadi Permana
+Mapel Terdaftar: Algoritma Pemrograman, Dasar-dasar Pemrograman, Android
+Kelas yang Diampu: 10 RPL 1, 10 RPL 2, 10 RPL 3
+
+Dashboard akan menampilkan tiga kelas tersebut (10 RPL 1, 10 RPL 2, 10 RPL 3).
+
+3. Proses Pengisian Jurnal & Absensi
+Guru memilih salah satu kelas (misal: "10 RPL 1").
+ Sistem akan menampilkan dua bagian:
+    1.  Formulir Jurnal Agenda Harian: Guru mengisi jurnal ini untuk mencatat mata pelajaran dan materi apa yang dibahas selama jam belajar di kelas tersebut.
+    2.  Daftar Absensi Siswa: Guru melakukan absensi (Hadir, Sakit, Izin, Alfa) untuk setiap siswa di kelas itu.
+ Setelah selesai, Guru menekan tombol *"Simpan Absensi"* (atau "Simpan Jurnal & Absensi") untuk merekam data.
+
+
+
+ C. Role Kepala Sekolah (Kepsek)
+
+1. Login Kepala Sekolah
+Kepala Sekolah login menggunakan NIP dan password yang telah didaftarkan oleh Admin.
+
+2. Dashboard Kepala Sekolah (Monitoring)
+Dashboard Kepala Sekolah dirancang untuk pemantauan dan rekapitulasi. Fitur utama meliputi:
+Laporan Gabungan: Melihat rekapitulasi laporan absensi siswa dan Jurnal Agenda Harian dari semua guru di sekolah.
+Pemantauan Kinerja: Memantau kinerja guru dan perkembangan belajar siswa berdasarkan data jurnal dan absensi yang masuk

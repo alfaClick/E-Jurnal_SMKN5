@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+  
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================================
+//      DATA GURU
+// ===================================
+model guru {
+  id_guru       Int      @id @default(autoincrement())
+  nip           String   @unique(map: "nip") @db.VarChar(50)
+  username      String?  @unique @db.VarChar(50)
+  nama_lengkap  String   @db.VarChar(100)
+  password      String   @db.VarChar(255)
+  role          Role?    @default(guru)
+  is_wali_kelas Boolean? @default(false) @map("is_wali_kelas")
+  
+  // Data Guru Produktif
+  id_jurusan    Int?      
+  jurusan       jurusan? @relation("GuruJurusan", fields: [id_jurusan], references: [id_jurusan], onDelete: NoAction, onUpdate: NoAction)
+
+  // Relasi
+  jadwal          jadwal[] @relation("GuruPengajar")
+  wali_dari_kelas kelas[]  @relation("WaliKelas")
+
+  // FIX: Ganti nama map jadi guru_id_jurusan
+  @@index([id_jurusan], map: "guru_id_jurusan")
+  @@map("guru")
+}
+
+// ===================================
+//      DATA JURUSAN
+// ===================================
+model jurusan {
+  id_jurusan   Int     @id @default(autoincrement())
+  nama_jurusan String  @db.VarChar(100)
+  
+  kelas          kelas[]
+  guru_produktif guru[]  @relation("GuruJurusan")
+
+  @@map("jurusan")
+}
+
+// ===================================
+//      DATA MAPEL (MASTER)
+// ===================================
+model mapel {
+  id_mapel    Int      @id @default(autoincrement())
+  nama_mapel  String   @unique @db.VarChar(100)
+  
+  jadwal      jadwal[]
+
+  @@map("mapel")
+}
+
+model kelas {
+  id_kelas      Int      @id @default(autoincrement())
+  nama_kelas    String   @db.VarChar(50)
+  id_jurusan    Int?
+  id_wali_kelas Int?
+  
+  jadwal     jadwal[]
+  jurusan    jurusan? @relation(fields: [id_jurusan], references: [id_jurusan], onDelete: NoAction, onUpdate: NoAction, map: "kelas_ibfk_1")
+  wali_kelas guru?    @relation("WaliKelas", fields: [id_wali_kelas], references: [id_guru], onDelete: NoAction, onUpdate: NoAction, map: "kelas_ibfk_2")
+  siswa      siswa[]
+
+  // FIX: Ganti nama map biar unik
+  @@index([id_jurusan], map: "kelas_id_jurusan")
+  @@index([id_wali_kelas], map: "kelas_id_wali_kelas")
+  @@map("kelas")
+}
+
+model siswa {
+  id_siswa      Int           @id @default(autoincrement())
+  nis           String        @unique(map: "nis") @db.VarChar(50)
+  nama_lengkap  String        @db.VarChar(100)
+  jenis_kelamin JenisKelamin? @default(L)
+  id_kelas      Int?
+  
+  absensi       absensi[]
+  kelas         kelas?        @relation(fields: [id_kelas], references: [id_kelas], onDelete: NoAction, onUpdate: NoAction, map: "siswa_ibfk_1")
+
+  // FIX: Ganti nama map
+  @@index([id_kelas], map: "siswa_id_kelas")
+  @@map("siswa")
+}
+
+// ===================================
+//      DATA JADWAL PELAJARAN
+// ===================================
+model jadwal {
+  id_jadwal   Int       @id @default(autoincrement())
+  id_guru     Int?
+  id_kelas    Int?
+  id_mapel    Int?      
+  
+  hari        String?   @db.VarChar(20)
+  jam_mulai   DateTime? @db.Time(0)
+  jam_selesai DateTime? @db.Time(0)
+  
+  absensi       absensi[]
+  guru          guru?     @relation("GuruPengajar", fields: [id_guru], references: [id_guru], onDelete: NoAction, onUpdate: NoAction, map: "jadwal_ibfk_1")
+  kelas         kelas?    @relation(fields: [id_kelas], references: [id_kelas], onDelete: NoAction, onUpdate: NoAction, map: "jadwal_ibfk_2")
+  mapel         mapel?    @relation(fields: [id_mapel], references: [id_mapel], onDelete: NoAction, onUpdate: NoAction)
+  
+  jurnal_harian jurnal_harian[]
+
+  // FIX: Ganti nama map semua biar unik
+  @@index([id_guru], map: "jadwal_id_guru")
+  @@index([id_kelas], map: "jadwal_id_kelas")
+  @@index([id_mapel], map: "jadwal_id_mapel")
+  @@map("jadwal")
+}
+
+model absensi {
+  id_absensi Int           @id @default(autoincrement())
+  id_siswa   Int?
+  id_jadwal  Int?
+  tanggal    DateTime?     @db.Date
+  status     StatusAbsensi? @default(H)
+  
+  siswa      siswa?        @relation(fields: [id_siswa], references: [id_siswa], onDelete: NoAction, onUpdate: NoAction, map: "absensi_ibfk_1")
+  jadwal     jadwal?       @relation(fields: [id_jadwal], references: [id_jadwal], onDelete: NoAction, onUpdate: NoAction, map: "absensi_ibfk_2")
+
+  // FIX: Ganti nama map
+  @@index([id_jadwal], map: "absensi_id_jadwal")
+  @@index([id_siswa], map: "absensi_id_siswa")
+  @@map("absensi")
+}
+
+model jurnal_harian {
+  id_jurnal Int       @id @default(autoincrement())
+  id_jadwal Int?
+  tanggal   DateTime? @db.Date
+  materi    String?   @db.VarChar(255)
+  kegiatan  String?   @db.Text
+  
+  jadwal    jadwal?   @relation(fields: [id_jadwal], references: [id_jadwal], onDelete: NoAction, onUpdate: NoAction, map: "jurnal_harian_ibfk_1")
+
+  // FIX: Ganti nama map
+  @@index([id_jadwal], map: "jurnal_harian_id_jadwal")
+  @@map("jurnal_harian")
+}
+
+enum Role {
+  guru
+  admin
+  kepsek
+}
+
+enum JenisKelamin {
+  L
+  P
+}
+
+enum StatusAbsensi {
+  H
+  I
+  S
+  A
+}
