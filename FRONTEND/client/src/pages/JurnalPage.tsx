@@ -68,13 +68,37 @@ export default function JurnalPage() {
     setLoading(true);
 
     try {
-      await guruAPI.simpanJurnal({
+      // ✅ PERBAIKAN: Ambil detail kelas untuk dapat id_jadwal
+      console.log("🔍 Mengambil detail kelas:", formData.kelasId);
+      const kelasDetail = await guruAPI.getKelasDetail(formData.kelasId);
+      console.log("🔍 Kelas Detail:", kelasDetail);
+
+      if (!kelasDetail.id_jadwal) {
+        throw new Error("Jadwal tidak ditemukan. Hubungi admin untuk menambahkan jadwal.");
+      }
+
+      // ✅ PERBAIKAN: Ambil siswa untuk buat absensi default
+      console.log("🔍 Mengambil siswa kelas:", formData.kelasId);
+      const siswaList = await guruAPI.getSiswaByKelas(formData.kelasId);
+      console.log("🔍 Siswa List:", siswaList);
+
+      // Buat absensi default semua Hadir
+      const absensiDefault = siswaList.map(siswa => ({
+        id_siswa: siswa.id_siswa,
+        status: 'H' as 'H'
+      }));
+      console.log("🔍 Absensi Default:", absensiDefault);
+
+      const payload = {
+        id_jadwal: kelasDetail.id_jadwal,
         tanggal: formData.tanggal,
-        kelasId: formData.kelasId,
-        mapel: formData.mapel,
-        jamPelajaran: formData.jamPelajaran,
         materi: formData.materi,
-      });
+        kegiatan: '-',
+        absensi: absensiDefault
+      };
+      console.log("📋 Payload final:", payload);
+
+      await guruAPI.simpanJurnal(payload);
 
       toast({
         title: 'Berhasil',
@@ -92,11 +116,9 @@ export default function JurnalPage() {
         materi: '',
       });
 
-      // Redirect ke dashboard
-      setTimeout(() => {
-        navigate('/guru');
-      }, 1500);
+     
     } catch (error) {
+      console.error("❌ Error submit:", error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Gagal menyimpan jurnal',

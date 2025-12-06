@@ -31,22 +31,8 @@ import {
   WrapItem,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
-// Pastikan path import ini sesuai dengan struktur folder Anda
 import { useAuth } from '../lib/auth'; 
 import { adminAPI } from '../lib/api';
-
-// MAPPING SEMENTARA: Ubah ini sesuai ID Jurusan di Database Anda
-// Anda bisa cek ID nya lewat API GET /admin/jurusan
-const JURUSAN_MAP = {
-  'RPL': 1,
-  'TKJ': 2,
-  'MM': 3,
-  'Guru Umum': null
-};
-
-const kelasList = ['10 RPL 1', '10 RPL 2', '10 RPL 3', '10 TKJ 1', '10 TKJ 2', '11 RPL 1', '11 RPL 2', '11 TKJ 1', '12 RPL 1', '12 RPL 2', '12 TKJ 1'];
-const mapelList = ['Matematika', 'Bahasa Indonesia', 'Bahasa Inggris', 'Algoritma', 'Dasar Pemrograman', 'Basis Data', 'Web Programming', 'Jaringan Komputer'];
-const jurusanList = ['RPL', 'TKJ', 'MM', 'Guru Umum'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -55,7 +41,7 @@ export default function AdminDashboard() {
 
   const [formData, setFormData] = useState({
     nip: '',
-    nama_lengkap: '', // PERBAIKAN 1: Gunakan nama key yang konsisten
+    nama_lengkap: '',
     role: 'Guru',
     jurusan: '',
     kelas: [],
@@ -67,11 +53,58 @@ export default function AdminDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
 
+  // ✅ DYNAMIC DATA FROM DATABASE
+  const [kelasList, setKelasList] = useState([]);
+  const [mapelList, setMapelList] = useState([]);
+  const [jurusanList, setJurusanList] = useState([]);
+  const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
+
+  // ✅ Fetch Master Data (Kelas, Mapel, Jurusan) from Database
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        // Fetch semua data master dari backend
+        const [kelasResponse, mapelResponse, jurusanResponse] = await Promise.all([
+          fetch('http://localhost:5000/api/admin/kelas', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+          }).then(r => r.json()),
+          fetch('http://localhost:5000/api/admin/mapel', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+          }).then(r => r.json()),
+          fetch('http://localhost:5000/api/admin/jurusan', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+          }).then(r => r.json())
+        ]);
+
+        setKelasList(kelasResponse || []);
+        setMapelList(mapelResponse || []);
+        setJurusanList(jurusanResponse || []);
+      } catch (error) {
+        console.error('Failed to fetch master data:', error);
+        toast({
+          title: 'Error',
+          description: 'Gagal memuat data kelas/mapel/jurusan',
+          status: 'error',
+          duration: 3000,
+        });
+      } finally {
+        setIsLoadingMasterData(false);
+      }
+    };
+
+    fetchMasterData();
+  }, [toast]);
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const response = await adminAPI.getUsers();
-        // Pastikan response.users ada, jika tidak fallback ke array kosong
         setRegisteredUsers(response.users || []);
       } catch (error) {
         console.error('Failed to fetch users:', error);
@@ -95,7 +128,6 @@ export default function AdminDashboard() {
   };
 
   const handleRegister = async () => {
-    // PERBAIKAN 2: Validasi menggunakan nama_lengkap
     if (!formData.nip || !formData.nama_lengkap || !formData.password) {
       toast({
         title: 'Error',
@@ -119,26 +151,20 @@ export default function AdminDashboard() {
     setIsSubmitting(true);
 
     try {
-      // PERBAIKAN 3: Sesuaikan Payload dengan Controller Backend
-      // Backend: { nip, nama_lengkap, password, role, id_jurusan }
       const payload = {
         nip: formData.nip,
-        nama_lengkap: formData.nama_lengkap, // KUNCI UTAMA PERBAIKAN ERROR 400
-        role: formData.role.toLowerCase(), // Backend mungkin expect lowercase ('guru'/'kepsek')
-        // Konversi string jurusan ke ID Integer
-        id_jurusan: JURUSAN_MAP[formData.jurusan] || null, 
+        nama_lengkap: formData.nama_lengkap,
+        role: formData.role.toLowerCase(),
+        id_jurusan: formData.jurusan ? parseInt(formData.jurusan) : null,
         password: formData.password,
-        // Note: kelas & mapel belum disimpan di registerGuru backend,
-        // tapi kita kirim saja jika nanti backend diupdate.
         kelas: formData.kelas,
         mapel: formData.mapel,
       };
 
-      console.log("Mengirim Payload:", payload); // Debugging
+      console.log("Mengirim Payload:", payload);
 
       const response = await adminAPI.registerUser(payload);
 
-      // Cek response dari backend (biasanya backend kirim status 201)
       if (response) {
         toast({
           title: 'Berhasil',
@@ -147,11 +173,9 @@ export default function AdminDashboard() {
           duration: 3000,
         });
 
-        // Refresh user list
         const usersResponse = await adminAPI.getUsers();
         setRegisteredUsers(usersResponse.users || []);
 
-        // Reset Form
         setFormData({
           nip: '',
           nama_lengkap: '',
@@ -237,212 +261,231 @@ export default function AdminDashboard() {
             </CardHeader>
 
             <CardBody p={8}>
-              <VStack spacing={6} align="stretch">
-                {/* NIP */}
-                <FormControl isRequired>
-                  <FormLabel color="gray.700" fontWeight="semibold">
-                    NIP (Nomor Induk Pegawai)
-                  </FormLabel>
-                  <Input
-                    placeholder="Contoh: 198227272"
-                    value={formData.nip}
-                    onChange={(e) => setFormData({ ...formData, nip: e.target.value })}
-                    size="lg"
-                    borderColor="gray.300"
-                    focusBorderColor="blue.500"
-                    _hover={{ borderColor: 'blue.300' }}
-                    bg="gray.50"
-                  />
-                </FormControl>
-
-                {/* Nama Lengkap - PERBAIKAN 4: Ubah value dan onChange ke nama_lengkap */}
-                <FormControl isRequired>
-                  <FormLabel color="gray.700" fontWeight="semibold">
-                    Nama Lengkap
-                  </FormLabel>
-                  <Input
-                    placeholder="GURU001"
-                    value={formData.nama_lengkap}
-                    onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
-                    size="lg"
-                    borderColor="gray.300"
-                    focusBorderColor="blue.500"
-                    _hover={{ borderColor: 'blue.300' }}
-                    bg="yellow.50"
-                  />
-                </FormControl>
-
-                {/* Role */}
-                <FormControl isRequired>
-                  <FormLabel color="gray.700" fontWeight="semibold">
-                    Role
-                  </FormLabel>
-                  <Select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    size="lg"
-                    borderColor="gray.300"
-                    focusBorderColor="blue.500"
-                    _hover={{ borderColor: 'blue.300' }}
-                    bg="gray.50"
-                  >
-                    <option value="Guru">Guru</option>
-                    <option value="Kepsek">Kepala Sekolah</option>
-                  </Select>
-                </FormControl>
-
-                {/* Jurusan - Only for Guru */}
-                {formData.role === 'Guru' && (
-                  <FormControl>
+              {isLoadingMasterData ? (
+                <Flex justify="center" align="center" py={12}>
+                  <Spinner size="xl" color="blue.500" thickness="4px" mr={3} />
+                  <Text color="gray.600">Memuat data...</Text>
+                </Flex>
+              ) : (
+                <VStack spacing={6} align="stretch">
+                  {/* NIP */}
+                  <FormControl isRequired>
                     <FormLabel color="gray.700" fontWeight="semibold">
-                      Jurusan (Opsional)
+                      NIP (Nomor Induk Pegawai)
+                    </FormLabel>
+                    <Input
+                      placeholder="Contoh: 198227272"
+                      value={formData.nip}
+                      onChange={(e) => setFormData({ ...formData, nip: e.target.value })}
+                      size="lg"
+                      borderColor="gray.300"
+                      focusBorderColor="blue.500"
+                      _hover={{ borderColor: 'blue.300' }}
+                      bg="gray.50"
+                    />
+                  </FormControl>
+
+                  {/* Nama Lengkap */}
+                  <FormControl isRequired>
+                    <FormLabel color="gray.700" fontWeight="semibold">
+                      Nama Lengkap
+                    </FormLabel>
+                    <Input
+                      placeholder="Contoh: Budi Santoso"
+                      value={formData.nama_lengkap}
+                      onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
+                      size="lg"
+                      borderColor="gray.300"
+                      focusBorderColor="blue.500"
+                      _hover={{ borderColor: 'blue.300' }}
+                      bg="gray.50"
+                    />
+                  </FormControl>
+
+                  {/* Role */}
+                  <FormControl isRequired>
+                    <FormLabel color="gray.700" fontWeight="semibold">
+                      Role
                     </FormLabel>
                     <Select
-                      placeholder="Pilih Jurusan"
-                      value={formData.jurusan}
-                      onChange={(e) => setFormData({ ...formData, jurusan: e.target.value })}
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                       size="lg"
                       borderColor="gray.300"
                       focusBorderColor="blue.500"
                       _hover={{ borderColor: 'blue.300' }}
                       bg="gray.50"
                     >
-                      {jurusanList.map((j) => (
-                        <option key={j} value={j}>{j}</option>
-                      ))}
+                      <option value="Guru">Guru</option>
+                      <option value="Kepsek">Kepala Sekolah</option>
                     </Select>
-                    <Text fontSize="xs" color="gray.500" mt={2}>
-                      💡 Pilih "Guru Umum" jika mengajar mata pelajaran umum (non-produktif)
-                    </Text>
                   </FormControl>
-                )}
 
-                {/* Kelas & Mapel - Only for Guru */}
-                {formData.role === 'Guru' && (
-                  <Box p={6} bg="blue.50" borderRadius="xl" border="2px solid" borderColor="blue.200">
-                    <VStack spacing={6} align="stretch">
-                      {/* Kelas yang Diampu */}
-                      <FormControl isRequired>
-                        <FormLabel color="blue.900" fontWeight="bold" fontSize="md">
-                          Kelas yang Diampu <Badge colorScheme="blue" ml={2}>Pilih lebih dari 1</Badge>
-                        </FormLabel>
-                        <CheckboxGroup
-                          value={formData.kelas}
-                          onChange={(values) => setFormData({ ...formData, kelas: values })}
-                        >
-                          <Box 
-                            maxH="200px" 
-                            overflowY="auto" 
-                            p={4} 
-                            bg="white" 
-                            borderRadius="lg"
-                            border="1px solid"
-                            borderColor="blue.200"
+                  {/* Jurusan - Only for Guru */}
+                  {formData.role === 'Guru' && (
+                    <FormControl>
+                      <FormLabel color="gray.700" fontWeight="semibold">
+                        Jurusan (Opsional)
+                      </FormLabel>
+                      <Select
+                        placeholder="Pilih Jurusan"
+                        value={formData.jurusan}
+                        onChange={(e) => setFormData({ ...formData, jurusan: e.target.value })}
+                        size="lg"
+                        borderColor="gray.300"
+                        focusBorderColor="blue.500"
+                        _hover={{ borderColor: 'blue.300' }}
+                        bg="gray.50"
+                      >
+                        {jurusanList.map((j) => (
+                          <option key={j.id_jurusan} value={j.id_jurusan}>
+                            {j.nama_jurusan}
+                          </option>
+                        ))}
+                      </Select>
+                      <Text fontSize="xs" color="gray.500" mt={2}>
+                        💡 Pilih jurusan jika guru mengajar mata pelajaran produktif
+                      </Text>
+                    </FormControl>
+                  )}
+
+                  {/* Kelas & Mapel - Only for Guru */}
+                  {formData.role === 'Guru' && (
+                    <Box p={6} bg="blue.50" borderRadius="xl" border="2px solid" borderColor="blue.200">
+                      <VStack spacing={6} align="stretch">
+                        {/* Kelas yang Diampu */}
+                        <FormControl isRequired>
+                          <FormLabel color="blue.900" fontWeight="bold" fontSize="md">
+                            Kelas yang Diajar 
+                          </FormLabel>
+                          <CheckboxGroup
+                            value={formData.kelas}
+                            onChange={(values) => setFormData({ ...formData, kelas: values })}
                           >
-                            <Stack spacing={3}>
-                              {kelasList.map((kelas) => (
-                                <Checkbox key={kelas} value={kelas} colorScheme="blue" size="lg">
-                                  <Text fontSize="md">{kelas}</Text>
-                                </Checkbox>
-                              ))}
-                            </Stack>
-                          </Box>
-                        </CheckboxGroup>
-                      </FormControl>
+                            <Box 
+                              maxH="200px" 
+                              overflowY="auto" 
+                              p={4} 
+                              bg="white" 
+                              borderRadius="lg"
+                              border="1px solid"
+                              borderColor="blue.200"
+                            >
+                              <Stack spacing={3}>
+                                {kelasList.map((kelas) => (
+                                  <Checkbox 
+                                    key={kelas.id_kelas} 
+                                    value={kelas.id_kelas.toString()} 
+                                    colorScheme="blue" 
+                                    size="lg"
+                                  >
+                                    <Text fontSize="md">{kelas.nama_kelas}</Text>
+                                  </Checkbox>
+                                ))}
+                              </Stack>
+                            </Box>
+                          </CheckboxGroup>
+                        </FormControl>
 
-                      <Divider borderColor="blue.300" />
+                        <Divider borderColor="blue.300" />
 
-                      {/* Mata Pelajaran yang Diajar */}
-                      <FormControl isRequired>
-                        <FormLabel color="blue.900" fontWeight="bold" fontSize="md">
-                          Mata Pelajaran yang Diajar <Badge colorScheme="green" ml={2}>Pilih lebih dari 1</Badge>
-                        </FormLabel>
-                        <CheckboxGroup
-                          value={formData.mapel}
-                          onChange={(values) => setFormData({ ...formData, mapel: values })}
-                        >
-                          <Box 
-                            maxH="200px" 
-                            overflowY="auto" 
-                            p={4} 
-                            bg="white" 
-                            borderRadius="lg"
-                            border="1px solid"
-                            borderColor="blue.200"
+                        {/* Mata Pelajaran yang Diajar */}
+                        <FormControl isRequired>
+                          <FormLabel color="blue.900" fontWeight="bold" fontSize="md">
+                            Mata Pelajaran yang Diajar
+                          </FormLabel>
+                          <CheckboxGroup
+                            value={formData.mapel}
+                            onChange={(values) => setFormData({ ...formData, mapel: values })}
                           >
-                            <Stack spacing={3}>
-                              {mapelList.map((mapel) => (
-                                <Checkbox key={mapel} value={mapel} colorScheme="green" size="lg">
-                                  <Text fontSize="md">{mapel}</Text>
-                                </Checkbox>
-                              ))}
-                            </Stack>
-                          </Box>
-                        </CheckboxGroup>
-                      </FormControl>
-                    </VStack>
-                  </Box>
-                )}
+                            <Box 
+                              maxH="200px" 
+                              overflowY="auto" 
+                              p={4} 
+                              bg="white" 
+                              borderRadius="lg"
+                              border="1px solid"
+                              borderColor="blue.200"
+                            >
+                              <Stack spacing={3}>
+                                {mapelList.map((mapel) => (
+                                  <Checkbox 
+                                    key={mapel.id_mapel} 
+                                    value={mapel.id_mapel.toString()} 
+                                    colorScheme="green" 
+                                    size="lg"
+                                  >
+                                    <Text fontSize="md">{mapel.nama_mapel}</Text>
+                                  </Checkbox>
+                                ))}
+                              </Stack>
+                            </Box>
+                          </CheckboxGroup>
+                        </FormControl>
+                      </VStack>
+                    </Box>
+                  )}
 
-                {/* Password Baru */}
-                <FormControl isRequired>
-                  <FormLabel color="gray.700" fontWeight="semibold">
-                    Password Baru
-                  </FormLabel>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    size="lg"
-                    borderColor="gray.300"
-                    focusBorderColor="blue.500"
-                    _hover={{ borderColor: 'blue.300' }}
-                    bg="yellow.50"
-                  />
-                </FormControl>
+                  {/* Password Baru */}
+                  <FormControl isRequired>
+                    <FormLabel color="gray.700" fontWeight="semibold">
+                      Password Baru
+                    </FormLabel>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      size="lg"
+                      borderColor="gray.300"
+                      focusBorderColor="blue.500"
+                      _hover={{ borderColor: 'blue.300' }}
+                      bg="gray.50"
+                    />
+                  </FormControl>
 
-                {/* Buttons */}
-                <HStack spacing={4} pt={4}>
-                  <Button
-                    flex={1}
-                    size="lg"
-                    h="60px"
-                    bg="linear-gradient(135deg, #48BB78 0%, #38A169 100%)"
-                    color="white"
-                    fontSize="lg"
-                    fontWeight="bold"
-                    onClick={handleRegister}
-                    isLoading={isSubmitting}
-                    loadingText="Mendaftar..."
-                    _hover={{
-                      bg: "linear-gradient(135deg, #38A169 0%, #2F855A 100%)",
-                      transform: "translateY(-2px)",
-                      boxShadow: "lg"
-                    }}
-                  >
-                    Daftar Akun
-                  </Button>
+                  {/* Buttons */}
+                  <HStack spacing={4} pt={4}>
+                    <Button
+                      flex={1}
+                      size="lg"
+                      h="60px"
+                      bg="linear-gradient(135deg, #48BB78 0%, #38A169 100%)"
+                      color="white"
+                      fontSize="lg"
+                      fontWeight="bold"
+                      onClick={handleRegister}
+                      isLoading={isSubmitting}
+                      loadingText="Mendaftar..."
+                      _hover={{
+                        bg: "linear-gradient(135deg, #38A169 0%, #2F855A 100%)",
+                        transform: "translateY(-2px)",
+                        boxShadow: "lg"
+                      }}
+                    >
+                      Daftar Akun
+                    </Button>
 
-                  <Button
-                    flex={1}
-                    size="lg"
-                    h="60px"
-                    bg="gray.500"
-                    color="white"
-                    fontSize="lg"
-                    fontWeight="bold"
-                    onClick={handleResetForm}
-                    _hover={{
-                      bg: "gray.600",
-                      transform: "translateY(-2px)",
-                      boxShadow: "lg"
-                    }}
-                  >
-                    Bersihkan Form
-                  </Button>
-                </HStack>
-              </VStack>
+                    <Button
+                      flex={1}
+                      size="lg"
+                      h="60px"
+                      bg="gray.500"
+                      color="white"
+                      fontSize="lg"
+                      fontWeight="bold"
+                      onClick={handleResetForm}
+                      _hover={{
+                        bg: "gray.600",
+                        transform: "translateY(-2px)",
+                        boxShadow: "lg"
+                      }}
+                    >
+                      Bersihkan Form
+                    </Button>
+                  </HStack>
+                </VStack>
+              )}
             </CardBody>
           </Card>
 
@@ -487,7 +530,6 @@ export default function AdminDashboard() {
                       {registeredUsers.map((user, idx) => (
                         <Tr key={idx} _hover={{ bg: 'blue.50' }}>
                           <Td fontWeight="medium" color="blue.900">{user.nip}</Td>
-                          {/* Backend mengirim 'nama', tapi kadang 'nama_lengkap' di getUsers. Sesuaikan dengan data API getUsers */}
                           <Td>{user.nama || user.nama_lengkap}</Td>
                           <Td>
                             <Badge
@@ -501,7 +543,6 @@ export default function AdminDashboard() {
                           </Td>
                           <Td>{user.jurusan || '-'}</Td>
                           <Td>
-                            {/* Tampilkan list kelas jika ada */}
                             {user.kelas && user.kelas.length > 0 ? (
                               <Wrap spacing={1}>
                                 {user.kelas.map((k, i) => (
@@ -513,7 +554,6 @@ export default function AdminDashboard() {
                             ) : '-'}
                           </Td>
                           <Td>
-                             {/* Tampilkan list mapel jika ada */}
                              {user.mapel && user.mapel.length > 0 ? (
                               <Wrap spacing={1}>
                                 {user.mapel.map((m, i) => (

@@ -1,6 +1,150 @@
 import prisma from '../prismaClient.js';
 
 /**
+ * @route   GET /api/kepsek/absensi
+ * @desc    Mengambil semua data absensi untuk dashboard
+ * @access  Private (Kepsek)
+ */
+export const getAllAbsensi = async (req, res) => {
+  try {
+    const allAbsensi = await prisma.absensi.findMany({
+      include: {
+        siswa: {
+          select: { nis: true, nama_lengkap: true }
+        },
+        jadwal: {
+          include: {
+            guru: { select: { nama_lengkap: true } },
+            kelas: { select: { nama_kelas: true } },
+            mapel: { select: { nama_mapel: true } }
+          }
+        }
+      },
+      orderBy: { tanggal: 'desc' }
+    });
+
+    // Group by tanggal + jadwal untuk hitung statistik
+    const grouped = {};
+    
+    allAbsensi.forEach(item => {
+      const key = `${item.tanggal}-${item.id_jadwal}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          tanggal: item.tanggal,
+          kelas: item.jadwal?.kelas?.nama_kelas || '-',
+          mapel: item.jadwal?.mapel?.nama_mapel || '-',
+          guru: item.jadwal?.guru?.nama_lengkap || '-',
+          hadir: 0,
+          sakit: 0,
+          izin: 0,
+          alpha: 0
+        };
+      }
+      
+      // Count per status
+      if (item.status === 'H') grouped[key].hadir++;
+      else if (item.status === 'S') grouped[key].sakit++;
+      else if (item.status === 'I') grouped[key].izin++;
+      else if (item.status === 'A') grouped[key].alpha++;
+    });
+
+    // Convert to array
+    const result = Object.values(grouped).map((item, idx) => ({
+      id: idx + 1,
+      tanggal: item.tanggal.toISOString().split('T')[0],
+      kelas: item.kelas,
+      mapel: item.mapel,
+      guru: item.guru,
+      hadir: item.hadir,
+      sakit: item.sakit,
+      izin: item.izin,
+      alpha: item.alpha
+    }));
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error getAllAbsensi:', error);
+    res.status(500).json({ msg: error.message });
+  }
+};
+
+/**
+ * @route   GET /api/kepsek/jurnal  
+ * @desc    Mengambil semua jurnal untuk dashboard
+ * @access  Private (Kepsek)
+ */
+export const getAllJurnal = async (req, res) => {
+  try {
+    const allJurnals = await prisma.jurnal_harian.findMany({
+      include: {
+        jadwal: {
+          include: {
+            guru: { select: { nama_lengkap: true } },
+            kelas: { select: { nama_kelas: true } },
+            mapel: { select: { nama_mapel: true } }
+          }
+        }
+      },
+      orderBy: { tanggal: 'desc' }
+    });
+
+    const result = allJurnals.map((item, idx) => ({
+      id: idx + 1,
+      tanggal: item.tanggal.toISOString().split('T')[0],
+      kelas: item.jadwal?.kelas?.nama_kelas || '-',
+      mapel: item.jadwal?.mapel?.nama_mapel || '-',
+      guru: item.jadwal?.guru?.nama_lengkap || '-',
+      jamPelajaran: '-',
+      materi: item.materi
+    }));
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error getAllJurnal:', error);
+    res.status(500).json({ msg: error.message });
+  }
+};
+
+/**
+ * @route   GET /api/kepsek/statistik
+ * @desc    Mengambil statistik dashboard
+ * @access  Private (Kepsek)
+ */
+export const getStatistik = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [totalSiswa, totalGuru, totalKelas, absensiToday] = await Promise.all([
+      prisma.siswa.count(),
+      prisma.guru.count({ where: { role: 'guru' } }),
+      prisma.kelas.count(),
+      prisma.absensi.findMany({
+        where: {
+          tanggal: today
+        }
+      })
+    ]);
+
+    const hadirCount = absensiToday.filter(a => a.status === 'H').length;
+    const totalAbsensi = absensiToday.length;
+    const persentaseKehadiran = totalAbsensi > 0 
+      ? Math.round((hadirCount / totalAbsensi) * 100) 
+      : 0;
+
+    res.status(200).json({
+      totalSiswa,
+      totalGuru,
+      totalKelas,
+      persentaseKehadiran
+    });
+  } catch (error) {
+    console.error('Error getStatistik:', error);
+    res.status(500).json({ msg: error.message });
+  }
+};
+
+/**
  * @route   GET /api/kepsek/jurnals
  * @desc    (Dashboard) Mengambil daftar semua jurnal harian dari semua guru
  * @access  Private (Kepsek)
@@ -8,20 +152,18 @@ import prisma from '../prismaClient.js';
 export const getAllJurnalHarian = async (req, res) => {
   try {
     const allJurnals = await prisma.jurnal_harian.findMany({
-      // Kita ambil data terkait yang diperlukan untuk card
       include: {
         jadwal: {
           include: {
             guru: {
-              select: { nama_lengkap: true }, // Nama Guru
+              select: { nama_lengkap: true },
             },
             kelas: {
-              select: { nama_kelas: true }, // Nama Kelas
+              select: { nama_kelas: true },
             },
           },
         },
       },
-      // Urutkan berdasarkan yang terbaru
       orderBy: {
         tanggal: 'desc',
       },
@@ -42,7 +184,6 @@ export const getDetailJurnalById = async (req, res) => {
   const { id_jurnal } = req.params;
 
   try {
-    // Langkah 1: Ambil data jurnal dan detail terkaitnya (guru, kelas, mapel)
     const detailJurnal = await prisma.jurnal_harian.findUnique({
       where: { id_jurnal: parseInt(id_jurnal) },
       include: {
@@ -60,8 +201,6 @@ export const getDetailJurnalById = async (req, res) => {
       return res.status(404).json({ msg: 'Jurnal tidak ditemukan' });
     }
 
-    // Langkah 2: Ambil daftar absensi yang terkait
-    // (Berdasarkan id_jadwal DAN tanggal yang sama dengan jurnal)
     const daftarAbsensi = await prisma.absensi.findMany({
       where: {
         id_jadwal: detailJurnal.id_jadwal,
@@ -69,15 +208,14 @@ export const getDetailJurnalById = async (req, res) => {
       },
       include: {
         siswa: {
-          select: { nis: true, nama_lengkap: true }, // Tampilkan nama siswa
+          select: { nis: true, nama_lengkap: true },
         },
       },
       orderBy: {
-        siswa: { nama_lengkap: 'asc' }, // Urutkan berdasarkan nama siswa
+        siswa: { nama_lengkap: 'asc' },
       },
     });
 
-    // Langkah 3: Gabungkan keduanya dan kirim sebagai respons
     res.status(200).json({
       detailJurnal,
       daftarAbsensi,
@@ -87,45 +225,38 @@ export const getDetailJurnalById = async (req, res) => {
   }
 };
 
-// =======================================================
-//    REKAP ABSENSI MINGGUAN
-// =======================================================
+/**
+ * @route   GET /api/kepsek/rekap-mingguan
+ * @desc    Rekap absensi mingguan
+ * @access  Private (Kepsek)
+ */
 export const getRekapMingguan = async (req, res) => {
   try {
-    // 1. Tentukan Rentang Tanggal (Mingguan)
-    // Frontend bisa mengirim ?tanggal=YYYY-MM-DD untuk minggu yg diinginkan
-    // Jika tidak ada, kita pakai minggu ini.
     const targetDate = req.query.tanggal ? new Date(req.query.tanggal) : new Date();
 
-    // Hitung hari Senin (Start of Week)
     const startOfWeek = new Date(targetDate);
-    const dayOfWeek = targetDate.getDay(); // 0=Minggu, 1=Senin, ...
+    const dayOfWeek = targetDate.getDay();
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     startOfWeek.setDate(targetDate.getDate() + diffToMonday);
-    startOfWeek.setHours(0, 0, 0, 0); // Set ke awal hari Senin
+    startOfWeek.setHours(0, 0, 0, 0);
 
-    // Hitung hari Minggu (End of Week)
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999); // Set ke akhir hari Minggu
+    endOfWeek.setHours(23, 59, 59, 999);
 
-    // 2. Ambil Agregat Absensi dari Database
-    // Kita kelompokkan berdasarkan id_siswa dan status
     const agregatAbsensi = await prisma.absensi.groupBy({
       by: ['id_siswa', 'status'],
       where: {
         tanggal: {
-          gte: startOfWeek, // >= Senin 00:00
-          lte: endOfWeek, // <= Minggu 23:59
+          gte: startOfWeek,
+          lte: endOfWeek,
         },
       },
       _count: {
-        status: true, // Hitung jumlah data per status
+        status: true,
       },
     });
 
-    // 3. Ubah hasil Agregat menjadi Map/Lookup yang mudah dibaca
-    // Hasilnya: { 1: { H: 5, S: 1 }, 2: { H: 6 } }
     const rekapMap = agregatAbsensi.reduce((acc, item) => {
       const { id_siswa, status, _count } = item;
       if (!acc[id_siswa]) {
@@ -136,7 +267,6 @@ export const getRekapMingguan = async (req, res) => {
       return acc;
     }, {});
 
-    // 4. Ambil semua data siswa (Nama & Kelas)
     const allSiswa = await prisma.siswa.findMany({
       select: {
         id_siswa: true,
@@ -147,20 +277,18 @@ export const getRekapMingguan = async (req, res) => {
         },
       },
       orderBy: {
-        kelas: { nama_kelas: 'asc' }, // Urutkan per kelas
+        kelas: { nama_kelas: 'asc' },
       },
     });
 
-    // 5. Gabungkan data Siswa dengan data Rekap
     const finalRekap = allSiswa.map((siswa) => ({
       id_siswa: siswa.id_siswa,
       nis: siswa.nis,
       nama_siswa: siswa.nama_lengkap,
       nama_kelas: siswa.kelas?.nama_kelas || 'N/A',
-      rekap: rekapMap[siswa.id_siswa] || { H: 0, S: 0, I: 0, A: 0, total: 0 }, // Tampilkan 0 jika siswa tsb tdk ada absensi
+      rekap: rekapMap[siswa.id_siswa] || { H: 0, S: 0, I: 0, A: 0, total: 0 },
     }));
 
-    // Kirim hasilnya
     res.status(200).json({
       rentang_tanggal: {
         mulai: startOfWeek.toISOString().split('T')[0],

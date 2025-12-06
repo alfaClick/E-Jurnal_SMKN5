@@ -13,10 +13,11 @@ import { useNavigate } from "react-router-dom";
 /**
  * Konfigurasi URL Backend
  */
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5500/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const LOGIN_URL = `${API_BASE.replace(/\/$/, "")}/auth/login`;
 
 export default function LoginPage() {
-  const [identifier, setIdentifier] = useState(""); // Bisa NIP atau Username
+  const [nip, setNip] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   
@@ -27,10 +28,10 @@ export default function LoginPage() {
     e.preventDefault();
 
     // 1. Validasi Input
-    if (!identifier || !password) {
+    if (!nip || !password) {
       toast({
         title: "Error",
-        description: "NIP/Username dan Password wajib diisi",
+        description: "NIP dan Password wajib diisi",
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -41,41 +42,30 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // ✅ AUTO DETECT: Admin atau Guru/Kepsek
-      const isAdmin = identifier.toLowerCase().includes("admin") || identifier.length < 8;
-      const loginEndpoint = isAdmin ? "/auth/login-admin" : "/auth/login";
-      const LOGIN_URL = `${API_BASE.replace(/\/$/, "")}${loginEndpoint}`;
-
-      // ✅ Dynamic body berdasarkan endpoint
-      const requestBody = isAdmin 
-        ? { username: identifier.trim(), password: password }
-        : { nip: identifier.trim(), password: password };
-
       console.log("🔄 Attempting login to:", LOGIN_URL);
-      console.log("📤 Request body:", requestBody);
+      console.log("📤 Request body:", { nip: nip.trim() });
 
       const response = await fetch(LOGIN_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ 
+          nip: nip.trim(), 
+          password: password 
+        }),
       });
 
-      // 2. Parse JSON
       const data: any = await response.json();
-
       console.log("📥 Response:", data);
 
-      // 3. Cek jika Backend memberi sinyal Gagal
       if (!response.ok) {
-        throw new Error(data.msg || "Login gagal. Periksa kembali kredensial Anda.");
+        throw new Error(data.msg || "NIP atau Password salah");
       }
 
-      // 4. LOGIN SUKSES
+      // LOGIN SUKSES
       console.log("✅ Login Sukses:", data);
 
-      // Simpan Token & Data User ke LocalStorage
       if (data.token) {
         localStorage.setItem("authToken", data.token);
       }
@@ -92,7 +82,7 @@ export default function LoginPage() {
         isClosable: true,
       });
 
-      // 5. Redirect Berdasarkan Role
+      // Redirect Berdasarkan Role
       setTimeout(() => {
         const role = data.user?.role ? data.user.role.toLowerCase() : "guru";
         
@@ -119,7 +109,6 @@ export default function LoginPage() {
     }
   }
 
-  // --- TAMPILAN (UI) ---
   return (
     <Box
       minH="100vh"
@@ -143,12 +132,12 @@ export default function LoginPage() {
           <VStack spacing={4} align="stretch">
             <Box>
               <Text mb={2} fontSize="sm" fontWeight={600} color="gray.700">
-                NIP / Username
+                NIP
               </Text>
               <Input
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="Masukkan NIP atau Username"
+                value={nip}
+                onChange={(e) => setNip(e.target.value)}
+                placeholder="Masukkan NIP"
                 size="lg"
                 borderColor="gray.300"
                 focusBorderColor="blue.500"
@@ -204,8 +193,7 @@ export default function LoginPage() {
               💡 Info Login:
             </Text>
             <Text fontSize="xs" color="blue.700">
-              • Admin: Gunakan username (contoh: "admin"){"\n"}
-              • Guru/Kepsek: Gunakan NIP (contoh: "19800202")
+              Gunakan NIP dan password yang telah terdaftar
             </Text>
           </Box>
         </VStack>

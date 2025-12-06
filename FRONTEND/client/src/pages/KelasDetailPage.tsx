@@ -22,7 +22,6 @@ import {
   Radio,
   useToast,
   Flex,
-  Badge,
   Spinner,
   SimpleGrid,
 } from "@chakra-ui/react";
@@ -117,16 +116,30 @@ export default function KelasDetailPage() {
     setSubmitting(true);
 
     try {
-      await guruAPI.simpanAbsensi({
-        kelasId: kelasId || '',
+      // ✅ PERBAIKAN: Ambil id_jadwal dari kelas
+      if (!kelas?.id_jadwal) {
+        throw new Error("Jadwal tidak ditemukan. Hubungi admin.");
+      }
+
+      // ✅ PERBAIKAN: Format absensi sesuai backend
+      const absensiData = siswaList.map(s => ({
+        id_siswa: s.id_siswa,
+        status: s.status || 'H'
+      }));
+
+      console.log("📋 Simpan absensi:", {
+        id_jadwal: kelas.id_jadwal,
         tanggal: formData.tanggal,
-        mapel: formData.mapel,
-        jamPelajaran: formData.jamPelajaran,
-        absensi: siswaList.map(s => ({
-          siswaId: s.nis,
-          status: s.status || 'H',
-          keterangan: s.keterangan || ''
-        }))
+        absensi: absensiData
+      });
+
+      // ✅ PERBAIKAN: Gunakan simpanJurnal
+      await guruAPI.simpanJurnal({
+        id_jadwal: kelas.id_jadwal,
+        tanggal: formData.tanggal,
+        materi: `Absensi - ${formData.mapel}`,
+        kegiatan: `Jam: ${formData.jamPelajaran}`,
+        absensi: absensiData
       });
 
       toast({
@@ -136,16 +149,7 @@ export default function KelasDetailPage() {
         duration: 3000,
       });
 
-      setTimeout(() => {
-        navigate('/guru');
-      }, 1500);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Gagal menyimpan absensi',
-        status: 'error',
-        duration: 3000,
-      });
+     
     } finally {
       setSubmitting(false);
     }

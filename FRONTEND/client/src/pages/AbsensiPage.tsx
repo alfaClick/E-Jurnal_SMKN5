@@ -11,6 +11,7 @@ type Props = {
   tanggal?: string;
   /** kalau true: header & filter disembunyikan (embed mode) */
   embedded?: boolean;
+  onChange?: (data: { id_siswa: number; status: 'H'|'S'|'I'|'A' }[]) => void;
 };
 
 const STY = {
@@ -39,26 +40,6 @@ export default function AbsensiPage({ kelasId, tanggal, embedded }: Props) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // MOCK siswa per kelas — nanti ganti ke fetch BE
-  const siswaMock: Record<string, Siswa[]> = useMemo(
-    () => ({
-      "1": [
-        { id: "S01", nama: "Citra Dewi" },
-        { id: "S02", nama: "Dani Pratama" },
-        { id: "S03", nama: "Eka Sari" },
-        { id: "S04", nama: "Fajar Nugroho" },
-        { id: "S05", nama: "Gita Permata" },
-      ],
-      "2": [
-        { id: "T01", nama: "Andi Setiawan" },
-        { id: "T02", nama: "Bunga Ayu" },
-        { id: "T03", nama: "Chandra Putra" },
-        { id: "T04", nama: "Dewi Nirmala" },
-      ],
-    }),
-    []
-  );
-
   // kalau standalone: load kelas
   useEffect(() => {
     if (embedded) return;
@@ -69,41 +50,70 @@ export default function AbsensiPage({ kelasId, tanggal, embedded }: Props) {
     })();
   }, [embedded]);
 
-  // load siswa saat kelas berubah
+  // ✅ PERBAIKAN: Load siswa dari backend
   useEffect(() => {
     if (!activeKelasId) return;
-    const siswa = siswaMock[activeKelasId] || [];
-    setRows(siswa.map(s => ({ id: s.id, nama: s.nama, status: "hadir" })));
-    setMsg("");
-  }, [activeKelasId, siswaMock]);
+    
+    (async () => {
+      try {
+        const siswaList = await guruAPI.getSiswaByKelas(activeKelasId);
+        setRows(siswaList.map(s => ({ 
+          id: String(s.id_siswa), 
+          nama: s.nama, 
+          status: "hadir" 
+        })));
+        setMsg("");
+      } catch (error) {
+        console.error("Error loading siswa:", error);
+        setRows([]);
+        setMsg("Gagal memuat data siswa");
+      }
+    })();
+  }, [activeKelasId]);
 
   function setStatus(id: string, status: Status) {
     setRows(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
   }
+  
 
   async function submit() {
     setSaving(true);
     setMsg("");
     try {
-      const hadir = rows.filter(r => r.status === "hadir").map(r => r.id);
-      const izin  = rows.filter(r => r.status === "izin").map(r => r.id);
-      const sakit = rows.filter(r => r.status === "sakit").map(r => r.id);
-      const alpha = rows.filter(r => r.status === "alpha").map(r => r.id);
+      // ✅ PERBAIKAN: Ambil detail kelas untuk dapat id_jadwal
+      const kelasDetail = await guruAPI.getKelasDetail(activeKelasId);
       
-      // Simpan absensi menggunakan API yang sudah ada
-      await guruAPI.simpanAbsensi({ 
-        kelasId: activeKelasId, 
-        tanggal: activeTanggal, 
-        absensi: rows.map(r => ({
-          siswaId: r.id,
-          status: r.status === 'hadir' ? 'H' : r.status === 'sakit' ? 'S' : r.status === 'izin' ? 'I' : 'A',
-          keterangan: ''
-        }))
+      if (!kelasDetail.id_jadwal) {
+        throw new Error("Jadwal tidak ditemukan. Hubungi admin.");
+      }
+
+      // ✅ PERBAIKAN: Format absensi sesuai backend
+      const absensiData = rows.map(r => ({
+        id_siswa: parseInt(r.id),
+        status: r.status === 'hadir' ? 'H' as 'H' : 
+                r.status === 'sakit' ? 'S' as 'S' : 
+                r.status === 'izin' ? 'I' as 'I' : 'A' as 'A'
+      }));
+
+      console.log("📋 Simpan absensi:", {
+        id_jadwal: kelasDetail.id_jadwal,
+        tanggal: activeTanggal,
+        absensi: absensiData
+      });
+
+      // ✅ PERBAIKAN: Gunakan simpanJurnal (jurnal + absensi sekaligus)
+      await guruAPI.simpanJurnal({ 
+        id_jadwal: kelasDetail.id_jadwal,
+        tanggal: activeTanggal,
+        materi: "Absensi harian", // Default materi
+        kegiatan: "-",
+        absensi: absensiData
       });
       
       setMsg("Absensi tersimpan ✔");
     } catch (e: any) {
-      setMsg(e?.response?.data?.message || e?.message || "Gagal simpan absensi");
+      console.error("❌ Error simpan absensi:", e);
+      setMsg(e?.message || "Gagal simpan absensi");
     } finally {
       setSaving(false);
     }

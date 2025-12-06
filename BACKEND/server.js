@@ -3,81 +3,67 @@ import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-
-
+import router from "./src/app.js"; // ✅ INI YANG KURANG!
 
 dotenv.config();
 
 const app = express();
 
-// --- MIDDLEWARES ---
+// --- MIDDLEWARES (URUTAN PENTING!) ---
 
-// 1. Konfigurasi CORS "STRICT" (Wajib spesifik, gak boleh bintang *)
-const corsOptions = {
-  // Ganti ini dengan URL Frontend lu. 
-  // Kalau lu pake Vite biasanya 5173. Kalau React biasa 3000.
-  // Gua masukin dua-duanya biar aman.
-  origin: ["http://localhost:5173", "http://localhost:3000"], 
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true, // Karena ini true, origin GAK BOLEH '*'
-};
-
-app.use(cors(corsOptions));
-
-// 2. Header Security Tambahan (Manual Fallback yang Benar)
-app.use((req, res, next) => {
-  // Ambil origin dari request yang masuk
-  const origin = req.headers.origin;
-  
-  // Kalau originnya dari localhost kita, izinkan. Kalau gak, blokir.
-  if (origin === "http://localhost:5173" || origin === "http://localhost:3000") {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Credentials", "true"); // Wajib string "true"
-  
-  if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-  }
-  next();
-});
-
+// 1. Body Parser (HARUS PALING ATAS)
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 2. CORS (Sederhana untuk Development)
+app.use(cors({
+  origin: [
+    "http://localhost:5173", 
+    "http://localhost:3000",
+    "http://127.0.0.1:5173"  // ✅ TAMBAH INI
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// 3. Security
 app.use(helmet());
 
+// 4. Rate Limiter
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100, 
-  standardHeaders: true, 
-  legacyHeaders: false, 
+  windowMs: 15 * 60 * 1000, // 15 menit
+  max: 100, // Max 100 request per IP
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
-app.use(express.json());
-
-// 3. Logger
+// 5. Logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log("Body:", req.body);
   next();
 });
 
-// --- ROUTING ---
+// --- ROUTES ---
+app.get("/", (req, res) => {
+  res.send("🎉 Halo! Server E-Jurnal sudah berjalan!");
+});
+
 app.use("/api", router);
 
-
-app.get('/', (req, res) => {
-  res.send('🎉 Halo! Server E-Jurnal sudah berjalan!');
-});
-
+// --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
+  console.error("❌ Error:", err.stack);
+  res.status(500).json({ 
+    msg: "Internal server error",
+    error: err.message 
+  });
 });
 
+// --- START SERVER ---
 const PORT = process.env.PORT || 5500;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+});

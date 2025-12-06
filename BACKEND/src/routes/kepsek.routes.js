@@ -1,6 +1,9 @@
 import express from 'express';
 
 import {
+  getAllAbsensi,
+  getAllJurnal,
+  getStatistik,
   getAllJurnalHarian,
   getDetailJurnalById,
   getRekapMingguan,
@@ -15,6 +18,63 @@ const router = express.Router();
  *   name: Kepsek
  *   description: API untuk fungsionalitas Kepala Sekolah (Monitoring)
  */
+
+/**
+ * @swagger
+ * /kepsek/statistik:
+ *   get:
+ *     summary: (Kepsek) Mengambil statistik dashboard
+ *     tags: [Kepsek]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Sukses mengambil statistik.
+ */
+router.get(
+  '/statistik',
+  checkAuth,
+  checkRole(['kepsek']),
+  getStatistik
+);
+
+/**
+ * @swagger
+ * /kepsek/absensi:
+ *   get:
+ *     summary: (Kepsek) Mengambil semua data absensi untuk dashboard
+ *     tags: [Kepsek]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Sukses mengambil daftar absensi.
+ */
+router.get(
+  '/absensi',
+  checkAuth,
+  checkRole(['kepsek']),
+  getAllAbsensi
+);
+
+/**
+ * @swagger
+ * /kepsek/jurnal:
+ *   get:
+ *     summary: (Kepsek) Mengambil semua jurnal untuk dashboard
+ *     tags: [Kepsek]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Sukses mengambil daftar jurnal.
+ */
+router.get(
+  '/jurnal',
+  checkAuth,
+  checkRole(['kepsek']),
+  getAllJurnal
+);
 
 /**
  * @swagger
@@ -67,7 +127,7 @@ const router = express.Router();
 router.get(
   '/jurnals',
   checkAuth,
-  checkRole(['kepsek']), // Hanya Kepala Sekolah yang dapat mengakses
+  checkRole(['kepsek']),
   getAllJurnalHarian
 );
 
@@ -156,7 +216,7 @@ router.get(
 router.get(
   '/jurnal/:id_jurnal',
   checkAuth,
-  checkRole(['kepsek']), // Hanya Kepala Sekolah yang dapat mengakses
+  checkRole(['kepsek']),
   getDetailJurnalById
 );
 
@@ -189,6 +249,5 @@ router.get(
   checkRole(['kepsek', 'admin']),
   getRekapMingguan
 );
-
 
 export default router;
